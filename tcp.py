@@ -101,6 +101,7 @@ class TCPTopo(Topo):
 #           shell=True)
 
 def stop_tcpprobe():
+    # os.system("rmmod tcp_probe; modprobe tcp_probe full=1;")    
     Popen("killall -9 cat", shell=True).wait()
 
 def start_qmon(iface, interval_sec=0.1, outfile="q.txt"):
@@ -124,6 +125,15 @@ def start_iperf(net):
     # long lived TCP flows in both directions.
     net.iperf((h1, h2), l4Type='TCP')
     
+#     h1 = net.get('h1')
+#     h2 = net.get('h2')
+#     server = h2.popen("iperf -s -w 16m")
+#     print("Starting iperf server...")
+#     time=args.time
+#     print"Time taken %ss"%time
+#     h1.cmd("iperf -t %s -c %s" %(time, h2.IP()))    
+    
+    
 def start_webserver(net):
     server = net.get('h1')
     proc = server.popen("python http/webserver.py", shell=True)
@@ -136,8 +146,15 @@ def start_ping(net):
     # to see how to do this.
     hosts = net.hosts
     h1, h2 = net.get('h1', 'h2')
-    proc = h1.popen('h2 ping -i 0.1 destination > RTTs.txt', shell=True)
-
+    time = arfs.time
+    proc = h1.popen("ping -c %s -i 0.1 %s > %s/RTTs.txt"% (time*10, h2.IP(), args.dir), shell=True)
+    
+#     h1 = net.get("h1")
+#     h2 = net.get("h2")
+#     time = args.time
+#     h1.popen("ping -c %s -i 0.1 %s > %s/ping.txt" % 
+#         (time * 10, h2.IP(), args.dir), shell=True)
+    return    return
     # Hint: Use host.popen(cmd, shell=True).  If you pass shell=True
     # to popen, you can redirect cmd's output using shell syntax.
     # i.e. ping ... > /path/to/ping.
@@ -160,7 +177,7 @@ def tcp():
     net.pingAll()
 
     # Start all the monitoring processes
-    # start_tcpprobe("cwnd.txt")
+    start_tcpprobe("cwnd.txt")
 
     # TODO: Start monitoring the queue sizes.  Since the switch I
     # created is "switch", I monitor one of the interfaces.  Which
@@ -174,7 +191,7 @@ def tcp():
 
     start_iperf(net)
     start_webserver(net)
-
+    start_ping(net)
     
 
     # TODO: measure the time it takes to complete webpage transfer
@@ -185,7 +202,9 @@ def tcp():
 
     # Hint: have a separate function to do this and you may find the
     # loop below useful.
-    
+    h1= net.get('h1')
+    h2= net.get('h2')
+    sample=[]    
     start_time = time()
     while True:
         # do the measurement (say) 3 times.
@@ -196,12 +215,16 @@ def tcp():
         if delta > args.time:
             break
         print("%.1fs left..." % (args.time - delta))
-    
-       
+        fetch = h2.popen("curl -o /dev/null -s -w \%{time_total} 10.0.0.1/http/index.html", shell=True , stdout=PIPE)
+        var =float(fetch.stdout.read())
+        sample.append(var)
+        
     # TODO: compute average (and standard deviation) of the fetch
     # times.  
-    # avg = total time/counter = statistics.mean(sample)
-    # sd = statistics.stdev(sample)
+    avg = statistics.mean(sample)
+    sd = statistics.stdev(sample)
+    print("Mean time is: %d",avg)
+    print("Standard deviation is: %d", sd)
     # Hint: The command below invokes a CLI which you can use to
     # debug.  It allows you to run arbitrary commands inside your
     # emulated hosts h1 and h2.
